@@ -1,84 +1,204 @@
 # docx-to-apkg
 
-Turn one Chinese-reading Word file into one Anki package.
+Agent skill biến **các từ được gạch chân trong file Word (.docx)** thành **một bảng từ vựng `.tsv` và một file Anki `.apkg`**.
 
-The skill extracts underlined words from a `.docx`, writes a 7-column vocabulary table, and builds a matching `.apkg`. Cards sit in Anki's built-in **Default** deck. The flow does not create extra decks.
-
-Python 3 standard library only. It does not open your Anki collection.
-
-## Layout
+Một bài đọc thành một bảng, một gói thẻ. Thẻ nằm trong deck **Default** có sẵn của Anki. Skill không tạo deck mới.
 
 ```
-.
-├── README.md
-├── docx-to-apkg/                      Cursor skill
-│   ├── SKILL.md
-│   ├── scripts/
-│   │   ├── docx_underlined_words.py
-│   │   └── build_apkg.py
-│   ├── references/chinese-vocab-tsv.md
-│   ├── template/sample.apkg           SpoonFed++ mold, read only
-│   ├── extract/                       underlined words, one per line
-│   └── tsv/                           7-column vocabulary tables
-└── output/                            finished .apkg files only
+bai_doc.docx
+    │
+    ├─(1) lọc từ gạch chân──► extract/2026_11_23_01.txt
+    ├─(2) bỏ từ đã có, viết TSV──► tsv/2026_11_23_01.tsv
+    └─(3) đóng gói SpoonFed++──► output/2026_11_23_01.apkg
 ```
 
-A reading uses the same `YYYY_MM_DD_STT` id for the extract, the TSV, and the apkg. `STT` is a two-digit sequence for that date (`01`, `02`, …). Never overwrite an existing id.
+Chỉ cần Python 3 (thư viện chuẩn). Skill không mở collection Anki của bạn. Cột `Audio` và `SP` để trống, để HyperTTS điền sau trong Anki.
 
-## Use as a Cursor skill
+Cùng bộ với:
 
-Point Cursor at `docx-to-apkg/SKILL.md`, then give it a `.docx` (or convert a `.doc` first). Optional: a reading date, or a request for traditional characters. Otherwise it uses today's date and simplified Chinese.
+| Skill | Việc làm |
+|---|---|
+| [`docx-to-chinese-vocab`](https://github.com/vibeailabs-tech/docx-to-chinese-vocab) | Lọc từ gạch chân → TSV |
+| [`chinese-vocab-tsv`](https://github.com/vibeailabs-tech/chinese-vocab-tsv) | Quy tắc bảng từ vựng 7 cột |
+| [`anki-apkg-builder`](https://github.com/vibeailabs-tech/chinese/tree/main/anki-apkg-builder) | Build `.apkg` từ TSV, có cây deck |
+| [Bộ skill `chinese`](https://github.com/vibeailabs-tech/chinese) | Gộp các skill tiếng Trung |
 
-Do not supply a deck name. This skill does not create decks.
+Skill này gộp bước lọc từ và bước đóng gói: **một file Word → một `.apkg`**, không tạo cây deck.
 
-## Run the scripts by hand
+## Cài đặt
 
-Extract underlined words from the document body. Adjacent underlined runs become one phrase. The first occurrence of each word is kept.
+### Cursor
+
+Clone repo rồi trỏ agent vào `docx-to-apkg/SKILL.md`, hoặc copy thư mục skill vào skills của Cursor:
+
+```bash
+git clone https://github.com/vibeailabs-tech/docx-to-apkg /tmp/docx-to-apkg
+cp -R /tmp/docx-to-apkg/docx-to-apkg ~/.cursor/skills/
+```
+
+### Hermes Agent
+
+```bash
+hermes skills install vibeailabs-tech/docx-to-apkg/docx-to-apkg
+```
+
+Kiểm tra:
+
+```bash
+hermes skills list | grep docx-to-apkg
+```
+
+Skill được nạp từ phiên mới, hoặc `/skills install --now ...` trong phiên đang chạy. Cập nhật: `hermes skills update docx-to-apkg`. Gỡ: `hermes skills uninstall docx-to-apkg`.
+
+### Devin / Claude Code
+
+```bash
+git clone https://github.com/vibeailabs-tech/docx-to-apkg /tmp/docx-to-apkg
+
+# Devin (global)
+cp -R /tmp/docx-to-apkg/docx-to-apkg ~/.config/devin/skills/
+# Claude Code (global)
+cp -R /tmp/docx-to-apkg/docx-to-apkg ~/.claude/skills/
+```
+
+## Yêu cầu
+
+- `python3` — không cần `pip install`.
+- File đầu vào là `.docx`. File `.doc` cũ phải chuyển trước:
+
+```bash
+textutil -convert docx FILE.doc
+# hoặc
+soffice --headless --convert-to docx FILE.doc
+```
+
+- Anki dùng note type **SpoonFed++**. Gói thẻ copy đúng id note type từ `docx-to-apkg/template/sample.apkg`, nên Anki tái sử dụng type sẵn có thay vì tạo bản trùng.
+
+## Cách dùng với agent
+
+Đưa đường dẫn file và nói, ví dụ:
+
+- "Chạy docx-to-apkg với file `~/Desktop/bai_doc.docx`"
+- "Lọc từ gạch chân rồi làm bộ thẻ Anki"
+- "docx sang apkg: `/path/to/bai_doc.docx`"
+
+Tuỳ chọn:
+
+- Ngày đọc (không nói thì dùng hôm nay theo múi giờ của bạn).
+- Chữ phồn thể (không nói thì viết giản thể).
+
+Không cần đặt tên deck. Skill không tạo deck.
+
+Agent sẽ:
+
+1. Chọn mã bài `YYYY_MM_DD_STT` (số thứ tự trong ngày, không ghi đè file cũ).
+2. Lọc từ gạch chân ra `docx-to-apkg/extract/<id>.txt`.
+3. Bỏ từ đã có trong cột `Vocabulary` của mọi `tsv/*.tsv`.
+4. Viết `docx-to-apkg/tsv/<id>.tsv` đúng 7 cột, rồi kiểm tra.
+5. Chạy `build_apkg.py` → `output/<id>.apkg`.
+
+Trả lời: số từ đã lọc, từ bị bỏ vì trùng (nếu có), đường dẫn extract / TSV / apkg, kết quả kiểm tra 7 cột, và một dòng hướng dẫn import.
+
+Danh sách rỗng, hoặc mọi từ đều trùng: dừng. Không bịa từ, không viết TSV hay apkg rỗng.
+
+## Chạy tay không cần agent
+
+Bước 1 — lọc từ gạch chân:
 
 ```bash
 python3 "docx-to-apkg/scripts/docx_underlined_words.py" "/path/to/file.docx" -o "docx-to-apkg/extract/2026_11_23_01.txt"
 ```
 
-Words underlined only in headers, footnotes, or comments are skipped. If the list is empty, stop. Do not invent words.
-
-Drop any extract line that already appears in the `Vocabulary` column of `docx-to-apkg/tsv/*.tsv`. Then write `docx-to-apkg/tsv/<id>.tsv` with this header:
-
-```
-Vocabulary	Pronunciation	English	Vietnamese	Example	Sentence Pinyin	Sentence Translation
-```
-
-Check that every row has seven tab-separated fields:
+Bước 2 — tự viết `docx-to-apkg/tsv/2026_11_23_01.tsv` theo quy tắc dưới, rồi kiểm tra:
 
 ```bash
 awk -F'\t' 'NF!=7{bad++} END{print NR" rows, "(bad+0)" bad"}' "docx-to-apkg/tsv/2026_11_23_01.tsv"
 ```
 
-Build the package only after that check passes:
+Bước 3 — đóng gói khi kiểm tra ra `0 bad`:
 
 ```bash
 python3 "docx-to-apkg/scripts/build_apkg.py" "docx-to-apkg/tsv/2026_11_23_01.tsv"
 ```
 
-That writes `output/<id>.apkg`. `Audio` and `SP` stay empty so HyperTTS can fill them later in Anki.
+File kết quả: `output/2026_11_23_01.apkg`.
 
-## Import into Anki
+## Kết quả từng bước
 
-The package copies the **SpoonFed++** note type from `docx-to-apkg/template/sample.apkg` and keeps that note type's id, so Anki reuses the type you already have. A note is identified by note type plus Hanzi.
+### 1. `extract/YYYY_MM_DD_STT.txt`
 
-- New characters import as new notes.
-- Characters already in Anki stay one note. If those notes already have audio, import with **Update notes: Never**. The default **If newer** overwrites the note and clears HyperTTS audio.
+Mỗi dòng một từ/cụm từ. Quy tắc:
 
-Leave `template/sample.apkg` untouched. To refresh the mold after you change SpoonFed++ in Anki, export one deck that uses only that note type, with **Support older Anki versions** ticked, and replace the file.
+- Bỏ trùng, giữ lần xuất hiện đầu tiên (không phân biệt hoa/thường).
+- Các đoạn gạch chân **liền nhau** (không có chữ chen giữa) được gộp thành một cụm.
+- Bỏ dấu câu và khoảng trắng thừa ở hai đầu.
+- Nhận cả gạch chân trực tiếp lẫn gạch chân qua character style của Word.
+- Chỉ đọc phần thân tài liệu. Từ gạch chân trong header, footer, footnote, endnote, comment bị bỏ qua.
 
-A `.doc` must be converted first:
+### 2. `tsv/YYYY_MM_DD_STT.tsv`
 
-```bash
-textutil -convert docx FILE.doc
-# or
-soffice --headless --convert-to docx FILE.doc
+- Cùng mã với extract và apkg. `STT` bắt đầu `01` mỗi ngày.
+- Quét `extract/`, `tsv/`, và `output/` cùng lúc khi chọn số; không ghi đè.
+- UTF-8, phân tách bằng tab, có dòng tiêu đề, đúng 7 cột:
+
+| Cột TSV | Field SpoonFed++ | Quy tắc |
+|---|---|---|
+| `Vocabulary` | `Hanzi` | Chỉ chữ Hán |
+| `Pronunciation` | `Pinyin` | Pinyin có dấu thanh |
+| `English` | `English` | Nghĩa tiếng Anh ngắn |
+| `Vietnamese` | `Vietnamese` | Nghĩa tiếng Việt ngắn |
+| `Example` | `Example` | Một câu dễ, phải chứa từ vựng |
+| `Sentence Pinyin` | `Sentence Pinyin` | Pinyin cả câu, có dấu thanh |
+| `Sentence Translation` | `Sentence Translation` | Dịch câu sang tiếng Anh |
+| (không có) | `Audio`, `SP` | Để trống cho HyperTTS |
+
+Trong một bảng, `Vocabulary` không được trùng. Ô không chứa ký tự tab.
+
+### 3. `output/YYYY_MM_DD_STT.apkg`
+
+- Một file `.apkg` cho một bài đọc.
+- Mọi thẻ thuộc deck **Default**.
+- Note type **SpoonFed++**, giữ nguyên id trong `template/sample.apkg`.
+- GUID = `guid_for(note type id, Hanzi)`. Cùng một chữ Hán + cùng note type = cùng một note khi import.
+
+## Nhập vào Anki
+
+File → Import → chọn `.apkg`.
+
+Anki nhận note theo note type cộng Hanzi:
+
+| Muốn làm gì | Cách |
+|---|---|
+| Import từ mới | Import bình thường |
+| Từ đã có trong Anki, note đó **đã có audio** | Chọn **Update notes: Never** |
+| Rebuild rồi import lại với mặc định **If newer** | Anki ghi đè note, xoá audio HyperTTS |
+
+Nếu `output/<id>.apkg` đã tồn tại, đừng build lại trừ khi bạn chủ động rebuild. Lúc import file rebuild, dùng **Update notes: Never** để audio cũ còn.
+
+Cùng một `Hanzi` ở hai bài khác nhau vẫn là một note. Bài sau không tạo thẻ mới cho chữ đó — vì vậy bước 3 của skill đã bỏ từ trùng trước khi viết TSV.
+
+## Cấu trúc repo
+
+```
+.
+├── README.md
+├── docx-to-apkg/                      skill cho agent
+│   ├── SKILL.md
+│   ├── scripts/
+│   │   ├── docx_underlined_words.py   lọc từ gạch chân
+│   │   └── build_apkg.py              đóng gói .apkg
+│   ├── references/chinese-vocab-tsv.md
+│   ├── template/sample.apkg           khuôn SpoonFed++, chỉ đọc
+│   ├── extract/                       danh sách từ, một dòng một từ
+│   └── tsv/                           bảng từ vựng 7 cột
+└── output/                            chỉ nhận file .apkg
 ```
 
-## Requirements
+`<skill-dir>` là `docx-to-apkg/`. `<output-dir>` là `output/` cạnh skill, không nằm trong skill. Bảng TSV để trong skill để thư mục import không đầy file làm việc.
 
-- Python 3
-- A `.docx` whose vocabulary is underlined in the document body
+## Lưu ý
+
+- Bước lọc từ là script, kết quả cố định. Pinyin, nghĩa và câu ví dụ do mô hình viết — xem lại trước khi học.
+- Không xoá hay sửa `template/sample.apkg`. Đó là file export thật từ Anki. Nếu bạn đổi SpoonFed++ (thêm/bớt field, đổi template), export một deck chỉ dùng note type đó, tick **Support older Anki versions**, rồi thay file khuôn.
+- File `.apkg` là ZIP kiểu legacy 2: `meta`, `collection.anki21`, `collection.anki2` (stub), `media` = `{}`. Không có audio.
+- `evals/` trong thư mục skill là bộ kiểm tra nhỏ (bài ngắn, bài trùng từ, bài không gạch chân).
