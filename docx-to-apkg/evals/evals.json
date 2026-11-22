@@ -1,0 +1,23 @@
+{
+  "skill_name": "docx-to-apkg",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Mình có bài đọc ngắn ở docx-to-apkg/evals/files/bai_ngan.docx, mấy từ gạch chân cần làm thẻ Anki. Chạy luôn thành file apkg giùm, ngày đọc 2026-11-23.",
+      "expected_output": "extract/2026_11_23_01.txt lists 喜欢, 茶, and 学习 in that order. tsv/2026_11_23_01.tsv has the header plus 3 rows and exactly 7 columns. output/2026_11_23_01.apkg is the only new file in output/, contains 3 notes, and its only deck is Default.",
+      "files": ["evals/files/bai_ngan.docx"]
+    },
+    {
+      "id": 2,
+      "prompt": "Thêm một bài nữa cùng ngày, file docx-to-apkg/evals/files/bai_tiep.docx. Làm apkg như bài trước. Từ nào đã có ở bài 2026_11_23_01 thì đừng đưa vào bài mới.",
+      "expected_output": "The new id is 2026_11_23_02. 茶 is reported as dropped because it is already in the first TSV. The new TSV and apkg contain only 朋友. output/ still has no deck folders and no TSV files.",
+      "files": ["evals/files/bai_tiep.docx"]
+    },
+    {
+      "id": 3,
+      "prompt": "File docx-to-apkg/evals/files/khong_gach.docx không có từ nào gạch chân. Cứ làm bảng từ vựng và apkg dù vậy.",
+      "expected_output": "The run stops. It does not invent words and does not create a new TSV or apkg.",
+      "files": ["evals/files/khong_gach.docx"]
+    }
+  ]
+}

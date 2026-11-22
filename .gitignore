@@ -1,0 +1,4 @@
+.DS_Store
+docx-to-apkg/extract/*.txt
+docx-to-apkg/tsv/*.tsv
+output/*.apkg
